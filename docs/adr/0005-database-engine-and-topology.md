@@ -1,8 +1,8 @@
 # 0005 - Database engine version and dev/prod topology
 
-**Date:** 2026-08-26
-**Status:** Accepted for topology and backup retention; **UNRESOLVED** for the RDS
-PostgreSQL engine version (see Context and Revisit-when).
+**Date:** 2026-08-26 (engine version resolved 2026-08-27)
+**Status:** Accepted for topology and backup retention; RDS PostgreSQL engine version
+**resolved to PostgreSQL 14** (see Decision). One open known issue tracked below.
 
 ## Context
 
@@ -12,22 +12,26 @@ against the local datasource. Flyway's PostgreSQL support is version-gated: a Fl
 refuses to run ("Unsupported Database") against a PostgreSQL major version newer than it
 knows about at the time it was released.
 
-**This is currently constrained and unresolved.** Step 0.1 could not confirm the exact
-Flyway version this application resolves to, because a local Java toolchain was not
-installed and `./gradlew dependencies --configuration runtimeClasspath | grep -i flyway`
-could not be run. The Spring Boot 2.6.3 BOM is understood to pin a Flyway 8.0.x line, which
-would reject PostgreSQL versions newer than it recognized at release time (this is an
-inference from the BOM, not a confirmed, resolved version — see the plan's finding B7). The
-RDS PostgreSQL engine version therefore cannot be finalized yet.
+**Resolved (Step 1.1):** `./gradlew dependencies --configuration runtimeClasspath` confirms
+the Spring Boot 2.6.3 BOM resolves Flyway to **8.0.5**, and the live `bootRun` log
+independently corroborates this (`Flyway Community Edition 8.0.5 by Redgate`). Flyway 8.0.x
+added PostgreSQL 14 support at release; PostgreSQL 15 requires Flyway 9+, which this BOM does
+not provide.
 
 ## Decision
 
-**Decision framework (to apply once unblocked):** pick the newest PostgreSQL major version
-that the actually-resolved Flyway version accepts. If the desired/newest PostgreSQL engine
-version is rejected by Flyway, resolve the conflict one of two ways: (a) pin RDS to an
-older PostgreSQL engine version Flyway does accept, or (b) override Flyway's resolved
-version explicitly in `build.gradle` (independent of the Spring Boot BOM) so it supports a
-newer PostgreSQL major. No specific engine version is chosen in this ADR.
+**Engine version: PostgreSQL 14.** Chosen as the newest major version the resolved Flyway
+8.0.5 accepts, per the decision framework below. Empirically validated in Steps 1.2/1.3:
+the app's single migration (`V1__create_tables.sql`) applied cleanly to a real
+`postgres:14` container with zero SQL changes needed, `flyway_schema_history` shows
+`success=true`, and a live MyBatis read (`GET /tags`) round-tripped correctly.
+
+**Decision framework (for reference / if a future PostgreSQL major is considered):** pick
+the newest PostgreSQL major version that the actually-resolved Flyway version accepts. If a
+desired newer PostgreSQL engine version is rejected by Flyway, resolve the conflict one of
+two ways: (a) pin RDS to an older PostgreSQL engine version Flyway does accept, or (b)
+override Flyway's resolved version explicitly in `build.gradle` (independent of the Spring
+Boot BOM) so it supports a newer PostgreSQL major.
 
 **Topology (decided, independent of the engine-version question):**
 - **Dev:** single-AZ, `db.t4g.micro`.
@@ -68,21 +72,52 @@ newer PostgreSQL major. No specific engine version is chosen in this ADR.
   (Phase 6/7 of the delivery roadmap), far from its actual cause. Guessing here is exactly
   the kind of invented fact this ADR process exists to avoid.
 
+## Known issue — MySQL-dialect LIMIT syntax breaks pagination on PostgreSQL
+
+**Not fixed. Deliberately deferred — tracked here, not in code, per an explicit decision not
+to touch production code outside a dedicated step.**
+
+Step 1.7's Testcontainers PostgreSQL integration suite
+(`src/test/java/io/spring/infrastructure/PostgresIntegrationTest.java` in the backend repo)
+found that `src/main/resources/mapper/ArticleReadService.xml` (lines 61 and 99, statements
+`queryArticles` and `findArticlesOfAuthors`) uses MySQL/SQLite's comma-form
+`limit #{page.offset}, #{page.limit}`. PostgreSQL rejects this outright:
+`ERROR: LIMIT #,# syntax is not supported`. This breaks `ArticleQueryService`'s
+offset/limit-based article listing, tag filtering, and user-feed queries — i.e. **article
+pagination and tag filtering will fail the moment the `postgres` profile serves this kind of
+request.** The cursor-based listing path (`limit #{page.queryLimit}`, a single value) is
+unaffected.
+
+Two of `PostgresIntegrationTest`'s six scenarios (pagination, tag filtering) fail against
+this bug and were left failing intentionally, as evidence, rather than weakened to pass.
+Create-user, create-article, favoriting, and commenting all pass with real data assertions
+against live PostgreSQL.
+
+**The fix, when someone picks this up:** change both statements to
+`limit #{page.limit} offset #{page.offset}` — valid syntax on both MySQL and PostgreSQL, so
+it doesn't regress the SQLite/default profile. `PostgresIntegrationTest`'s two currently-red
+cases are the acceptance criteria; they should flip green with no other test changes.
+
 ## Consequences
 
-- No RDS engine version can be provisioned yet; the Terraform RDS module's engine-version
-  variable stays a placeholder/TODO until this is resolved.
 - Dev and prod diverge in cost and resilience by design (Multi-AZ prod costs roughly double
   a single instance's price for the standby).
 - Prod's 30-day backup retention costs more in storage than the 7-day minimum but is the
   explicit trade favoring detectability of logical corruption over storage savings.
-- Any Terraform planning or apply that depends on the RDS engine version (Phase 6 in the
-  delivery roadmap) is blocked until this ADR's open question is closed.
+- **The backend cannot correctly serve paginated or tag-filtered article listings against
+  PostgreSQL until the known issue above is fixed.** This blocks relying on the `postgres`
+  profile for anything beyond the write/read paths Step 1.7 confirmed working
+  (users, articles-by-slug, favorites, comments) — it does not block RDS provisioning itself
+  (Terraform doesn't care about MyBatis SQL), but it should be fixed before any real traffic
+  hits Postgres-backed pagination, and certainly before Phase 6 (RDS) is treated as done.
 
 ## Revisit-when
 
-**Revisit once `./gradlew dependencies` can be run locally and the exact Flyway version is
-confirmed.** At that point, apply the decision framework above (newest PostgreSQL major
-Flyway accepts, or an explicit Flyway version override in `build.gradle`) to pick a
-specific RDS engine version, and update this ADR's status to fully Accepted with the
-version recorded.
+**Engine version:** resolved — no further action needed unless a future requirement forces a
+newer PostgreSQL major, in which case re-apply the decision framework above against
+whatever Flyway version is current at that time.
+
+**Known issue (LIMIT syntax):** revisit before the backend is pointed at real RDS
+PostgreSQL for production traffic (Phase 6 of the delivery roadmap), or sooner if any
+change in this repo starts requiring correct pagination/tag-filtering support against
+Postgres for a local/dev workflow.
