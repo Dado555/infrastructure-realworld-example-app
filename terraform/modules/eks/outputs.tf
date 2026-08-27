@@ -73,3 +73,8 @@ output "lb_controller_role_arn" {
   description = "ARN of the LB controller's IAM role, for the helm chart's service-account annotation."
   value       = aws_iam_role.lb_controller.arn
 }
+
+output "external_secrets_role_arn" {
+  description = "ARN of the ESO pod identity role, scoped to the dev/realworld/* secrets and the rds managed credential."
+  value       = aws_iam_role.external_secrets.arn
+}

@@ -32,3 +32,14 @@ output "rds_kms_key_arn" {
   description = "ARN of the dedicated CMK used for RDS storage encryption."
   value       = module.rds.kms_key_arn
 }
+
+# step 6.3 reads this via remote state to scope eso's iam policy
+output "app_secret_arn" {
+  description = "ARN of the dev/realworld/app secret (JWT signing key)."
+  value       = aws_secretsmanager_secret.app.arn
+}
+
+output "app_secrets_kms_key_arn" {
+  description = "ARN of the CMK encrypting the app secrets, for eso's kms:Decrypt grant."
+  value       = aws_kms_key.app_secrets.arn
+}

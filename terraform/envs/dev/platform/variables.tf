@@ -40,6 +40,18 @@ variable "network_state_key" {
   default     = "dev/network/terraform.tfstate"
 }
 
+variable "data_state_bucket" {
+  description = "S3 bucket holding the data composition's remote state."
+  type        = string
+  default     = "realworld-terraform-state-262786914511"
+}
+
+variable "data_state_key" {
+  description = "State key for the data composition, read via terraform_remote_state (step 6.3 needs its secret ARNs)."
+  type        = string
+  default     = "dev/data/terraform.tfstate"
+}
+
 # longest support window of any current version, has all the addons we need
 variable "kubernetes_version" {
   description = "EKS Kubernetes minor version."

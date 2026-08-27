@@ -84,3 +84,19 @@ variable "node_ami_type" {
   type        = string
   default     = "AL2023_x86_64_STANDARD"
 }
+
+# step 6.3: external secrets operator inputs, sourced from dev/data's remote state
+variable "app_secret_arn" {
+  description = "ARN of the dev/realworld/app secret (JWT signing key). Used to derive the dev/realworld/* resource pattern for eso's iam policy."
+  type        = string
+}
+
+variable "app_secrets_kms_key_arn" {
+  description = "ARN of the CMK encrypting the app secrets, granted to eso for kms:Decrypt."
+  type        = string
+}
+
+variable "rds_master_secret_arn" {
+  description = "ARN of the RDS-managed master credential secret (rds!db-... naming, doesn't match the dev/realworld/* prefix). Granted explicitly, not via wildcard."
+  type        = string
+}
