@@ -13,7 +13,7 @@ provider "aws" {
   }
 }
 
-# Cross-composition read of the network state - VPC/subnet IDs come from here, never hardcoded.
+# reads vpc/subnet ids from the network composition's state
 data "terraform_remote_state" "network" {
   backend = "s3"
 

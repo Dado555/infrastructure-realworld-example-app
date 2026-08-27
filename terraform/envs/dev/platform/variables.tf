@@ -40,20 +40,13 @@ variable "network_state_key" {
   default     = "dev/network/terraform.tfstate"
 }
 
-# Picked 2026-08-27 via `aws eks describe-cluster-versions`: 1.36 is AWS's current defaultVersion,
-# has the longest remaining standard/extended support window of anything on offer (std support to
-# 2027-08, ext to 2028-08 - a full 5 months longer than 1.35 and 8 months longer than 1.34, which
-# exits standard support in ~3 months), and every addon this project needs (vpc-cni, coredns,
-# kube-proxy, ebs-csi-driver, pod-identity-agent) already has a stable default build for it. Newest
-# here isn't a blind pick - it's newest, longest-lived, and already fully covered by the addon
-# ecosystem at once.
+# longest support window of any current version, has all the addons we need
 variable "kubernetes_version" {
   description = "EKS Kubernetes minor version."
   type        = string
   default     = "1.36"
 }
 
-# Same IP used for the ALB security group in Step 4.3 - may need updating if it has changed since.
 variable "eks_endpoint_public_access_cidrs" {
   description = "CIDRs allowed to reach the EKS public API endpoint."
   type        = list(string)
@@ -61,12 +54,11 @@ variable "eks_endpoint_public_access_cidrs" {
 }
 
 variable "eks_cluster_log_retention_days" {
-  description = "CloudWatch retention for EKS control-plane logs, in days. Short in dev to keep cost down."
+  description = "CloudWatch retention for EKS control-plane logs, in days."
   type        = number
   default     = 7
 }
 
-# tf-user is the identity running kubectl for verification - granted cluster-admin via an access entry.
 variable "eks_admin_principal_arn" {
   description = "IAM principal ARN granted cluster-admin on the EKS cluster."
   type        = string

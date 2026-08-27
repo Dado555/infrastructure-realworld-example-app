@@ -1,8 +1,4 @@
-# Control plane only - no node group here (that's the next step). vpc_config.security_group_ids is
-# left unset so EKS creates and manages its own cluster security group for control-plane<->node
-# traffic, kept separate from Phase 4's hand-authored node-sg (which models ALB->node app-port
-# traffic, not control-plane API traffic). The node group step attaches node-sg to the nodes and can
-# reference cluster_security_group_id (output below) alongside it.
+# control plane only, no node group yet
 resource "aws_eks_cluster" "this" {
   name     = "${var.name_prefix}-eks"
   role_arn = aws_iam_role.cluster.arn
@@ -15,7 +11,7 @@ resource "aws_eks_cluster" "this" {
     public_access_cidrs     = var.endpoint_public_access_cidrs
   }
 
-  # Secrets envelope encryption - the setting that can't be bolted on after creation.
+  # can't be added after creation
   encryption_config {
     provider {
       key_arn = aws_kms_key.eks_secrets.arn
@@ -25,7 +21,7 @@ resource "aws_eks_cluster" "this" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
-  # API-only auth - access entries are the only way in, no legacy aws-auth ConfigMap.
+  # access entries only, no aws-auth configmap
   access_config {
     authentication_mode = "API"
   }

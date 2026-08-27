@@ -3,15 +3,13 @@ variable "name_prefix" {
   type        = string
 }
 
-# 1.36 chosen over newer/older options - see the ADR-worthy reasoning in the platform composition's
-# variables.tf default and the step's commit message. Kept overridable so a future step can bump it.
 variable "kubernetes_version" {
   description = "EKS Kubernetes minor version, e.g. 1.36."
   type        = string
 }
 
 variable "subnet_ids" {
-  description = "Subnets for the cluster's ENIs. Private-app subnets - no node group in this step, but the control plane still needs subnets to attach to."
+  description = "Private-app subnets for the cluster."
   type        = list(string)
 
   validation {

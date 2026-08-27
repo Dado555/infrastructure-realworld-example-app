@@ -1,4 +1,3 @@
-# Dedicated cluster service role - not reused from Phase 4, matching the same per-service pattern as the KMS key.
 data "aws_iam_policy_document" "cluster_assume" {
   statement {
     actions = ["sts:AssumeRole"]

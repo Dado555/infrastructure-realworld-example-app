@@ -1,4 +1,4 @@
-# tf-user gets cluster-admin via an access entry - this is the identity running kubectl for verification.
+# cluster-admin for whoever runs kubectl
 resource "aws_eks_access_entry" "admin" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = var.admin_principal_arn
