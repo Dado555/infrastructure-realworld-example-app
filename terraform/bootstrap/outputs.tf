@@ -1,7 +1,3 @@
-# Values every later composition's backend.tf/backend.hcl (Step 3.3) needs to
-# point at this remote state: bucket name, lock table name, and the KMS key
-# used for encryption. Exposed as outputs instead of requiring readers to
-# re-derive the naming convention from locals.tf.
 output "state_bucket_name" {
   description = "Name of the S3 bucket that stores Terraform remote state for every other composition."
   value       = aws_s3_bucket.terraform_state.bucket

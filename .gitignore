@@ -1,6 +1,4 @@
-# Real secrets live only in local/.env, created locally from local/.env.example.
-# Never commit it. Kept here at the repo root (not just local/.gitignore) so the
-# rule applies on every branch regardless of which branch local/.gitignore exists on.
+local
 local/.env
 
 # Local .terraform directories
@@ -14,10 +12,7 @@ local/.env
 crash.log
 crash.*.log
 
-# Exclude all .tfvars files, which are likely to contain sensitive data, such as
-# password, private keys, and other secrets. These should not be part of version
-# control as they are data points which are potentially sensitive and subject
-# to change depending on the environment.
+# Exclude all .tfvars files, which are likely to contain sensitive data
 *.tfvars
 *.tfvars.json
 
@@ -25,10 +20,8 @@ crash.*.log
 # re-include them with a negation pattern so contributors always have a starting point.
 !*.tfvars.example
 
-# .terraform.lock.hcl is deliberately NOT ignored anywhere in this file. It must be
-# committed so every machine (laptop and CI) resolves the exact same provider version,
-# which is the entire point of pinning providers in versions.tf. Do not add a pattern
-# that would match it (e.g. a bare ".terraform.lock.hcl" or "*.lock.hcl" line).
+# .terraform.lock.hcl must stay committed - don't ignore it, that's how CI and
+# your laptop end up resolving different provider versions.
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
