@@ -37,3 +37,8 @@ output "node_group_status" {
   description = "Status of the managed node group."
   value       = module.eks.node_group_status
 }
+
+output "lb_controller_role_arn" {
+  description = "ARN of the LB controller's IAM role, for the helm chart's service-account annotation."
+  value       = module.eks.lb_controller_role_arn
+}

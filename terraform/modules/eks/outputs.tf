@@ -68,3 +68,8 @@ output "node_iam_role_arn" {
   description = "ARN of the node IAM role."
   value       = aws_iam_role.node.arn
 }
+
+output "lb_controller_role_arn" {
+  description = "ARN of the LB controller's IAM role, for the helm chart's service-account annotation."
+  value       = aws_iam_role.lb_controller.arn
+}
