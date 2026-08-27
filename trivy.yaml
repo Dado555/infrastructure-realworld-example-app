@@ -1,0 +1,5 @@
+# used by `make validate` -> trivy config terraform/
+exit-code: 1
+scan:
+  skip-dirs:
+    - "**/.terraform"
