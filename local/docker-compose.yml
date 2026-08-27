@@ -1,0 +1,126 @@
+# local/docker-compose.yml -- Step 2.3: full local stack (postgres + backend +
+# frontend) wired together to reproduce single-origin ALB-like routing without
+# any AWS dependency. See local/README.md for usage.
+#
+# No secrets are hardcoded here -- every credential-shaped value is ${VAR}
+# interpolation sourced from local/.env (copy local/.env.example -> .env and
+# fill in real local values first; see that file's comments).
+#
+# The Compose "version:" key is intentionally omitted -- it's a legacy
+# Compose-V1 field, ignored (with a deprecation warning) by the Compose V2
+# CLI this repo targets (`docker compose ...`, confirmed installed at v2.39.4).
+name: realworld-local
+
+services:
+  # --- PostgreSQL ---
+  # postgres:14 matches the engine version validated in Phase 1 (per the ADRs).
+  # Deliberately NOT published to the host: this machine has a stray
+  # wslrelay.exe already bound to 127.0.0.1:5432, so binding the container's
+  # 5432 to the host would either fail outright or silently shadow/conflict
+  # with that process. It doesn't need to be published anyway -- backend talks
+  # to it over the compose network as `postgres:5432`, which never touches the
+  # host's port space at all. If you ever need psql from the host, use
+  # `docker compose exec postgres psql -U $DB_USERNAME -d $DB_NAME` instead of
+  # publishing the port.
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready alone can report "ready" while still refusing the actual
+      # target database/role during first-time init; passing -U/-d makes the
+      # check match what the backend will actually connect as.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # --- Backend (Spring Boot, postgres profile) ---
+  # Built from the sibling repo's own Dockerfile (Step 2.1, feat/postgres-profile
+  # branch) as-is -- nothing here rebuilds or overrides its build logic, only
+  # supplies runtime config. Path is relative (two levels up from local/, then
+  # into the sibling checkout) rather than an absolute Windows path, so this
+  # file stays portable across machines/usernames as long as the sibling-repo
+  # layout under PROJECTS/incode is preserved.
+  backend:
+    build:
+      context: ../../spring-boot-realworld-example-app
+    depends_on:
+      # MUST be `condition: service_healthy`, not a plain `depends_on:` list
+      # entry -- a plain depends_on only waits for the postgres *container* to
+      # start, not for Postgres itself to finish initializing and start
+      # accepting connections. Flyway would then race the DB and fail
+      # migrations on a slow-starting box.
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      # postgres:5432 is the *internal* compose-network address/port -- always
+      # 5432 here regardless of whether/which host port postgres publishes
+      # (it publishes none; see above).
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # No default in application.properties (${JWT_SECRET}, no fallback) --
+      # the app fails fast on startup if this is unset or blank.
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      # 8080 = app traffic under /api (server.servlet.context-path=/api).
+      # 8081 = actuator management port. Both published to the host so you can
+      # curl the backend directly for debugging, separate from the
+      # single-origin path through the frontend that the acceptance tests
+      # actually exercise.
+      - "${BACKEND_HOST_PORT}:8080"
+      - "${BACKEND_MANAGEMENT_HOST_PORT}:8081"
+    healthcheck:
+      # curl IS present in eclipse-temurin:11-jre-jammy (verified directly:
+      # `docker run --rm eclipse-temurin:11-jre-jammy sh -c 'which curl'` ->
+      # /usr/bin/curl, also /usr/bin/wget) -- the runtime stage of this
+      # backend's own Dockerfile is FROM that exact image, so no TCP-only or
+      # depends_on:service_started fallback is needed here; a real HTTP
+      # readiness check is used.
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8081/actuator/health/readiness",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      # Cold start = JVM boot + Flyway migration + Gradle-built jar's own
+      # warmup; generous so the first `up --build` doesn't get marked
+      # unhealthy while still legitimately starting.
+      start_period: 45s
+
+  # --- Frontend (Angular SPA on nginx) ---
+  # Built from the sibling repo's own Dockerfile (Step 2.2, feat/relative-api-url
+  # branch) as-is. The image's baked-in HEALTHCHECK (wget against /healthz,
+  # from that Dockerfile) is inherited unchanged -- not overridden here.
+  frontend:
+    build:
+      context: ../../angular-realworld-example-app
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      # Overrides the image's built-in /etc/nginx/nginx.conf (which has no
+      # /api proxy at all -- that's the ALB's job in production) with the
+      # local-only variant that adds it. See nginx-local.conf's own header
+      # comment for the full rationale and why proxy_pass is written the way
+      # it is. Read-only mount: nginx never needs to write to this file.
+      - ./nginx-local.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      # The single origin: this is the only host port a browser (or the
+      # acceptance-test curls) needs to talk to -- both the SPA and, via the
+      # /api proxy in nginx-local.conf, the backend.
+      - "${FRONTEND_HOST_PORT}:8080"
+
+volumes:
+  postgres-data:
