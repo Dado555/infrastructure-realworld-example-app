@@ -79,3 +79,10 @@ variable "maintenance_window" {
   type        = string
   default     = "mon:05:00-mon:06:00"
 }
+
+# dev value per plan §3.8; a future prod caller of the backups module would pass 30
+variable "backup_daily_retention_days" {
+  description = "Days to retain AWS Backup daily recovery points."
+  type        = number
+  default     = 7
+}

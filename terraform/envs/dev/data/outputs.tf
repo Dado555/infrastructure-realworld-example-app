@@ -43,3 +43,13 @@ output "app_secrets_kms_key_arn" {
   description = "ARN of the CMK encrypting the app secrets, for eso's kms:Decrypt grant."
   value       = aws_kms_key.app_secrets.arn
 }
+
+output "backup_vault_name" {
+  description = "Name of the AWS Backup vault (step 6.4)."
+  value       = module.backups.vault_name
+}
+
+output "backup_plan_id" {
+  description = "ID of the AWS Backup plan, used by the restore-verification follow-up dispatch."
+  value       = module.backups.plan_id
+}
