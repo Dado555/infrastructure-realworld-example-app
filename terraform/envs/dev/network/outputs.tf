@@ -52,3 +52,18 @@ output "private_db_route_table_id" {
   description = "ID of the private-db route table (no internet route)."
   value       = module.vpc.private_db_route_table_id
 }
+
+output "alb_security_group_id" {
+  description = "ID of the ALB security group."
+  value       = module.vpc.alb_security_group_id
+}
+
+output "node_security_group_id" {
+  description = "ID of the EKS node security group."
+  value       = module.vpc.node_security_group_id
+}
+
+output "rds_security_group_id" {
+  description = "ID of the RDS security group."
+  value       = module.vpc.rds_security_group_id
+}
