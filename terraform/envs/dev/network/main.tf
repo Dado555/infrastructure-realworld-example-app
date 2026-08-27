@@ -25,4 +25,7 @@ module "vpc" {
   private_db_subnet_cidrs  = var.private_db_subnet_cidrs
 
   flow_log_retention_days = var.flow_log_retention_days
+
+  alb_ingress_cidr  = var.alb_ingress_cidr
+  alb_to_node_ports = var.alb_to_node_ports
 }

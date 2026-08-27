@@ -58,3 +58,16 @@ variable "flow_log_retention_days" {
   type        = number
   default     = 1
 }
+
+# dev-only IP restriction - widen to 0.0.0.0/0 when actually going live
+variable "alb_ingress_cidr" {
+  description = "CIDR allowed to reach alb-sg on 80/443."
+  type        = string
+  default     = "109.245.225.55/32"
+}
+
+variable "alb_to_node_ports" {
+  description = "Ports the alb's ip-mode target groups reach on node-sg."
+  type        = list(number)
+  default     = [8080, 8081]
+}

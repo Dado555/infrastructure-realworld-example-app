@@ -1,4 +1,4 @@
-# alb-sg: internet-facing per the architecture - a human decides pre-apply whether to restrict this to a dev IP
+# alb-sg: internet-facing
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
   description = "alb: public 80/443 in, node-sg only out"
@@ -29,17 +29,16 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# ip-mode target groups hit pod IPs directly: backend traffic (8080) + actuator health checks (8081); frontend also serves 8080
+# ip-mode target groups hit pod IPs directly - ports come from var.alb_to_node_ports, not hardcoded here
 locals {
-  node_app_ports = {
-    app      = 8080
-    actuator = 8081
-  }
+  # for_each needs string keys; this keeps the port number as the value
+  alb_to_node_ports = { for p in var.alb_to_node_ports : tostring(p) => p }
 }
 
+# dev-only IP restriction via var.alb_ingress_cidr - widen to 0.0.0.0/0 when actually going live
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   security_group_id = aws_security_group.alb.id
-  cidr_ipv4         = "0.0.0.0/0"
+  cidr_ipv4         = var.alb_ingress_cidr
   from_port         = 80
   to_port           = 80
   ip_protocol       = "tcp"
@@ -48,7 +47,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  cidr_ipv4         = "0.0.0.0/0"
+  cidr_ipv4         = var.alb_ingress_cidr
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
@@ -56,25 +55,25 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_to_node" {
-  for_each = local.node_app_ports
+  for_each = local.alb_to_node_ports
 
   security_group_id            = aws_security_group.alb.id
   referenced_security_group_id = aws_security_group.node.id
   from_port                    = each.value
   to_port                      = each.value
   ip_protocol                  = "tcp"
-  description                  = "alb -> node-sg, ${each.key} port"
+  description                  = "alb -> node-sg, port ${each.value}"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "node_from_alb" {
-  for_each = local.node_app_ports
+  for_each = local.alb_to_node_ports
 
   security_group_id            = aws_security_group.node.id
   referenced_security_group_id = aws_security_group.alb.id
   from_port                    = each.value
   to_port                      = each.value
   ip_protocol                  = "tcp"
-  description                  = "from alb-sg, ${each.key} port"
+  description                  = "from alb-sg, port ${each.value}"
 }
 
 # node-to-node traffic - same sg on both sides
