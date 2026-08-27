@@ -16,6 +16,15 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# ...but *.tfvars.example files are safe, checked-in templates with no real values -
+# re-include them with a negation pattern so contributors always have a starting point.
+!*.tfvars.example
+
+# .terraform.lock.hcl is deliberately NOT ignored anywhere in this file. It must be
+# committed so every machine (laptop and CI) resolves the exact same provider version,
+# which is the entire point of pinning providers in versions.tf. Do not add a pattern
+# that would match it (e.g. a bare ".terraform.lock.hcl" or "*.lock.hcl" line).
+
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
 override.tf
