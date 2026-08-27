@@ -65,6 +65,81 @@ The backend and its actuator port are also published directly
 those; everything works through the frontend's one origin, same as it will
 through the ALB in production.
 
+## Smoke test
+
+`smoke-test.sh` is a scripted, repeatable proof that the full user journey
+works end to end -- register, log in, read your own profile, create an
+article, read it back, comment on it, favourite it, list it by tag, delete
+it -- asserting on response **body content** at every step, not just HTTP
+status (a 200 with an empty/wrong body is still a failure). It takes the
+base URL as its one argument, so the exact same script also runs later
+against dev and prod (see the implementation plan, Steps 7.5 and 8.x) --
+nothing in it is specific to this Compose stack.
+
+```bash
+cd local
+docker compose up -d          # if not already up
+bash smoke-test.sh http://localhost:8080
+```
+
+A full run prints one `PASS: <step>` line per step it clears, and stops at
+the first failure with a single `FAIL: <step> - <what was expected vs
+got>` line, exiting non-zero -- it never continues past a failure
+pretending things are fine. Requires `curl` and `jq` on `PATH` (checked
+up front, with a clear message if either is missing).
+
+Each run registers a freshly-generated, timestamp-suffixed username, email,
+and article/tag, and a freshly-generated random password -- re-running the
+script never collides with a previous run's data, and no credential is ever
+hardcoded, reused, or printed.
+
+### Current known-failing step: step 10 (tag-filtered listing)
+
+As of this writing, `smoke-test.sh` **passes steps 1-9 and fails at step
+10** (`GET /api/articles?tag=<the-tag-used>`), exiting non-zero. This is
+expected, and is not a bug in the script or in this stack's wiring -- it is
+this smoke test correctly catching a real, already-documented backend bug:
+paginated/tag-filtered article listing (`GET /api/articles`, with or
+without `?tag=`) returns HTTP 500 on PostgreSQL --
+`org.postgresql.util.PSQLException: ERROR: LIMIT #,# syntax is not
+supported` -- because `ArticleReadService.xml` uses MySQL/SQLite's
+comma-form `LIMIT` syntax, which Postgres rejects outright. Full details,
+the exact statements affected, and the fix are tracked in this repo at
+`docs/adr/0005-database-engine-and-topology.md` -- not present on this
+branch's working tree, but committed on the `docs/adr-0001-0008` branch
+(commit `db09ad2`); check that branch out, or `git show
+db09ad2:docs/adr/0005-database-engine-and-topology.md`, to read it.
+Deliberately documented there rather than fixed here, per that ADR's own
+explicit decision not to touch backend code outside a dedicated step.
+
+Once that bug is fixed, step 10 should flip from `FAIL` to `PASS` with
+**no changes needed to `smoke-test.sh`** -- it already asserts the correct,
+real behaviour (the article we just created and favourited shows up in its
+own tag's listing). If a future run exits 0, that's the signal the fix
+landed and pagination/tag-filtering works against Postgres.
+
+Because the run stops at step 10, the article, user, and comment it created
+are left in the database rather than being cleaned up by step 11 (delete)
+-- harmless, since every run's data is uniquely named and never collides
+with a later run's.
+
+### Fails fast when the stack is broken
+
+`smoke-test.sh` also fails quickly and clearly -- not with a hang or a raw
+`curl` error -- when a dependency is actually down. For example, with the
+backend stopped:
+
+```bash
+docker compose stop backend
+bash smoke-test.sh http://localhost:8080   # fails at an early step that needs
+                                            # the backend (e.g. step 2, GET
+                                            # /api/tags), in a few seconds,
+                                            # with a clear FAIL message --
+                                            # not step 10's known bug
+docker compose start backend               # bring it back
+docker compose ps                          # wait until backend shows "healthy"
+```
+
 ## Tear down
 
 Two very different commands:
