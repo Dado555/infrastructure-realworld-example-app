@@ -1,0 +1,14 @@
+# not applied yet - the ebs-csi-driver addon this depends on doesn't exist until the addons.tf terraform lands
+# once applied: kubectl apply -f storageclass.yaml, then remove the is-default-class annotation from gp2
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: gp3
+  encrypted: "true"
