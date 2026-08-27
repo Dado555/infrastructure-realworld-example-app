@@ -43,3 +43,17 @@ module "eks" {
   node_min_size          = var.node_min_size
   node_max_size          = var.node_max_size
 }
+
+# token for the helm provider - same tf-user creds, no irsa needed (irsa/oidc is scp-blocked here anyway)
+data "aws_eks_cluster_auth" "this" {
+  name = module.eks.cluster_name
+}
+
+# wires helm_release resources (argo cd, in the eks module) to the live cluster
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    token                  = data.aws_eks_cluster_auth.this.token
+  }
+}

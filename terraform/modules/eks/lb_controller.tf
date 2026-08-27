@@ -1,6 +1,4 @@
-# --- aws load balancer controller iam: pod identity instead of irsa, oidc federation is scp-blocked in this account ---
-# helm install + test ingress happen in a later step; this only prepares the role so the chart has something to bind to
-
+# aws load balancer controller iam: pod identity instead of irsa, oidc federation is scp-blocked in this account
 data "aws_iam_policy_document" "lb_controller_pod_identity_assume" {
   statement {
     actions = ["sts:AssumeRole", "sts:TagSession"]
@@ -17,7 +15,7 @@ resource "aws_iam_role" "lb_controller" {
   assume_role_policy = data.aws_iam_policy_document.lb_controller_pod_identity_assume.json
 }
 
-# official policy from kubernetes-sigs/aws-load-balancer-controller v3.5.0 docs/install/iam_policy.json, fetched verbatim (not hand-transcribed)
+# official policy from kubernetes-sigs/aws-load-balancer-controller v3.5.0 docs/install/iam_policy.json
 resource "aws_iam_policy" "lb_controller" {
   name   = "${var.name_prefix}-lb-controller-policy"
   policy = file("${path.module}/lb_controller_iam_policy.json")
