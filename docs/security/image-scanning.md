@@ -193,11 +193,14 @@ gate. HIGH findings and any-severity findings without a fix should be reported
 (e.g. uploaded as a build artifact or posted as a PR comment) but not block the
 build.
 
-## 5. DECISION REQUIRED — accept EOL Spring Boot 2.6.3, or scope a Boot-upgrade phase?
+## 5. DECISION — accept EOL Spring Boot 2.6.3 (Option A), decided 2026-08-27
 
-**This decision is explicitly NOT made in this document or by this step.** The plan
-calls this out as the largest open scope question in the project. What follows is
-the evidence; the choice between the two options below is for a human to make.
+**Decided: Option A — accept EOL Spring Boot 2.6.3 as a documented, stated risk.**
+A Spring Boot 3.x migration (Option B) is explicitly deferred, not rejected — it
+remains available as a future, separately-scoped phase if this project's context
+changes (e.g. it stops being a portfolio/demo deployment). This section originally
+laid out both options as open; what follows is retained as the evidence trail for
+that decision.
 
 **The evidence, in one sentence:** all 83 of the backend's HIGH/CRITICAL findings
 (17 CRITICAL, 66 HIGH) live entirely in the application-dependency layer tied to
@@ -233,3 +236,11 @@ HIGH, no fix) does not need suppression because it does not trip the recommended
 CRITICAL-with-fix CI gate in the first place. Adding a `.trivyignore` now, before
 the human decision above is made, would be speculative and was explicitly out of
 scope per this step's instructions.
+
+**Follow-up needed at CI-wiring time (Step 8.1):** per the recommended policy in
+Section 4, the backend's CI pipeline will need an explicit `.trivyignore` or
+"accepted risk" annotation for all 17 CRITICAL CVEs listed in Section 2 (each with
+an expiry/review date) so CI can go green under the CRITICAL-with-fix gate without
+a real fix — otherwise Step 8.1 will find the pipeline permanently red on this
+image. This is a direct consequence of the Option A decision above, not a new
+open question.
