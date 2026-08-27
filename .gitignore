@@ -1,3 +1,8 @@
+# Real secrets live only in local/.env, created locally from local/.env.example.
+# Never commit it. Kept here at the repo root (not just local/.gitignore) so the
+# rule applies on every branch regardless of which branch local/.gitignore exists on.
+local/.env
+
 # Local .terraform directories
 .terraform/
 
