@@ -1,24 +1,21 @@
 locals {
-  # Static ARN construction (account id + fixed name) avoids a role referencing its own
-  # aws_iam_role resource, which would be a dependency cycle.
-  gha_role_names = [
+  gha_user_names = [
     "gha-backend-ecr-push",
     "gha-frontend-ecr-push",
     "gha-infra-plan",
     "gha-infra-apply",
   ]
-  gha_role_arns = [for name in local.gha_role_names : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${name}"]
+  gha_user_arns = [for name in local.gha_user_names : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${name}"]
 
   state_bucket_arn = "arn:aws:s3:::${var.state_bucket_name}"
   lock_table_arn   = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.lock_table_name}"
 }
 
-# --- gha-backend-ecr-push: push-only access to the backend ECR repo, triggered from master ---
-
+# push-only access to the backend
 data "aws_iam_policy_document" "backend_ecr_push" {
   statement {
     sid       = "EcrAuthToken"
-    actions   = ["ecr:GetAuthorizationToken"] # account-wide by AWS design, cannot be resource-scoped
+    actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]
   }
 
@@ -37,18 +34,15 @@ data "aws_iam_policy_document" "backend_ecr_push" {
 }
 
 module "gha_backend_ecr_push" {
-  source = "../../../modules/github-oidc-role"
+  source = "../../../modules/iam-ci-user"
 
-  role_name         = "gha-backend-ecr-push"
-  oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
-  sub_claims        = ["repo:${var.github_owner}/${var.backend_repo}:ref:refs/heads/master"]
+  user_name = "gha-backend-ecr-push"
 
   attach_inline_policy = true
   inline_policy_json   = data.aws_iam_policy_document.backend_ecr_push.json
 }
 
-# --- gha-frontend-ecr-push: push-only access to the frontend ECR repo, triggered from main ---
-
+# push-only access to the frontend
 data "aws_iam_policy_document" "frontend_ecr_push" {
   statement {
     sid       = "EcrAuthToken"
@@ -71,21 +65,15 @@ data "aws_iam_policy_document" "frontend_ecr_push" {
 }
 
 module "gha_frontend_ecr_push" {
-  source = "../../../modules/github-oidc-role"
+  source = "../../../modules/iam-ci-user"
 
-  role_name         = "gha-frontend-ecr-push"
-  oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
-  sub_claims        = ["repo:${var.github_owner}/${var.frontend_repo}:ref:refs/heads/main"]
+  user_name = "gha-frontend-ecr-push"
 
   attach_inline_policy = true
   inline_policy_json   = data.aws_iam_policy_document.frontend_ecr_push.json
 }
 
-# --- gha-infra-plan: read-only, triggered from PRs against the infra repo ---
-# ReadOnlyAccess already covers S3/DynamoDB reads broadly, but the state-bucket and lock-table
-# statements are kept explicit so this policy is self-documenting about what plan actually needs -
-# and DynamoDB write is required regardless, since the S3 backend still takes a lock to run `plan`.
-
+# read-only, triggered from PRs against the infra repo
 data "aws_iam_policy_document" "infra_plan" {
   statement {
     sid       = "StateBucketRead"
@@ -107,24 +95,22 @@ data "aws_iam_policy_document" "infra_plan" {
 }
 
 module "gha_infra_plan" {
-  source = "../../../modules/github-oidc-role"
+  source = "../../../modules/iam-ci-user"
 
-  role_name         = "gha-infra-plan"
-  oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
-  sub_claims        = ["repo:${var.github_owner}/${var.infra_repo}:pull_request"]
+  user_name = "gha-infra-plan"
 
   managed_policy_arns  = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
   attach_inline_policy = true
   inline_policy_json   = data.aws_iam_policy_document.infra_plan.json
 }
 
-# --- gha-infra-apply: write access, triggered only from the "prod" GitHub Environment ---
+# write access, triggered only from the "prod" GitHub Environment ---
 # PowerUserAccess grants everything except iam/organizations/account (S3 + DynamoDB are already
 # covered by it, so no separate state-bucket/lock-table statements are needed here). The gap this
 # project actually needs closed is IAM, since Terraform here creates the EKS/RDS service roles -
 # so IAM management is granted back, but scoped to the "<workload_role_prefix>-*" naming
-# convention and explicitly denied on the gha-* CI roles themselves (this composition's own
-# output) so this role can never widen its own trust policy or any sibling CI role's permissions.
+# convention and explicitly denied on the gha-* CI users themselves (this composition's own
+# output) so this user can never mint itself a new key or widen any sibling CI user's permissions.
 
 data "aws_iam_policy_document" "infra_apply" {
   statement {
@@ -209,38 +195,30 @@ data "aws_iam_policy_document" "infra_apply" {
     }
   }
 
-  # Read-only on the one OIDC provider this composition owns - create/delete stays a bootstrap-profile
-  # action, not something the automated apply role can do to its own trust anchor.
+  # Self-protection: this user (and its 3 sibling CI users) can never be modified by gha-infra-apply,
+  # closing off the obvious privilege-escalation path of a compromised apply run minting itself a new
+  # access key or attaching AdministratorAccess to itself.
   statement {
-    sid       = "ReadOidcProvider"
-    actions   = ["iam:GetOpenIDConnectProvider", "iam:ListOpenIDConnectProviders"]
-    resources = [aws_iam_openid_connect_provider.github.arn]
-  }
-
-  # Self-protection: this role (and its 3 sibling CI roles) can never be modified by gha-infra-apply,
-  # closing off the obvious privilege-escalation path of a compromised apply run widening its own
-  # trust policy or attaching AdministratorAccess to itself.
-  statement {
-    sid    = "DenySelfAndSiblingCiRoleModification"
+    sid    = "DenySelfAndSiblingCiUserModification"
     effect = "Deny"
     actions = [
-      "iam:UpdateAssumeRolePolicy",
-      "iam:AttachRolePolicy",
-      "iam:DetachRolePolicy",
-      "iam:PutRolePolicy",
-      "iam:DeleteRolePolicy",
-      "iam:DeleteRole",
+      "iam:AttachUserPolicy",
+      "iam:DetachUserPolicy",
+      "iam:PutUserPolicy",
+      "iam:DeleteUserPolicy",
+      "iam:DeleteUser",
+      "iam:CreateAccessKey",
+      "iam:UpdateAccessKey",
+      "iam:DeleteAccessKey",
     ]
-    resources = local.gha_role_arns
+    resources = local.gha_user_arns
   }
 }
 
 module "gha_infra_apply" {
-  source = "../../../modules/github-oidc-role"
+  source = "../../../modules/iam-ci-user"
 
-  role_name         = "gha-infra-apply"
-  oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
-  sub_claims        = ["repo:${var.github_owner}/${var.infra_repo}:environment:prod"]
+  user_name = "gha-infra-apply"
 
   managed_policy_arns  = ["arn:aws:iam::aws:policy/PowerUserAccess"]
   attach_inline_policy = true

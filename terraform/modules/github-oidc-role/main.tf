@@ -1,4 +1,4 @@
-# Federated trust for GitHub Actions OIDC - only the exact sub/aud below can assume this role, no long-lived keys involved
+# Federated trust for GitHub Actions OIDC
 data "aws_iam_policy_document" "trust" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]

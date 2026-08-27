@@ -1,5 +1,4 @@
-# Dedicated key for ECR image encryption - kept separate from the bootstrap state-bucket CMK so
-# an ECR key rotation/policy change can't affect Terraform state, and vice versa.
+# Key for ECR image encryption
 resource "aws_kms_key" "ecr" {
   description         = "Encrypts realworld-backend and realworld-frontend ECR repositories"
   enable_key_rotation = true
