@@ -1,7 +1,6 @@
-# used to build the s3 service name below, keeps the module region-agnostic
 data "aws_region" "current" {}
 
-# free gateway endpoint - takes ecr layer pulls (s3-backed) off the nat gateway
+# takes s3 costs off the nat gateway
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.this.id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
@@ -16,5 +15,3 @@ resource "aws_vpc_endpoint" "s3" {
     Name = "${var.name_prefix}-s3-endpoint"
   }
 }
-
-# interface endpoints (ecr.api/ecr.dkr etc) deferred - cost more than the nat they'd replace, revisit only if phase 9 observability shows real nat data-transfer cost

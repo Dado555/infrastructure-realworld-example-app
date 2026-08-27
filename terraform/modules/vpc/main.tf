@@ -1,4 +1,4 @@
-# picks 2 AZs dynamically so this module works in any region, not just us-east-1
+# picks 2 AZs dynamically so this module works in any region
 data "aws_availability_zones" "available" {
   state = "available"
 }

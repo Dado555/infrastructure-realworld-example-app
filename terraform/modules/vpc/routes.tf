@@ -36,7 +36,7 @@ resource "aws_route_table_association" "private_app" {
   route_table_id = aws_route_table.private_app.id
 }
 
-# deliberately no 0.0.0.0/0 route here - db tier has no path in or out to the internet
+# db tier has no path in or out to the internet
 resource "aws_route_table" "private_db" {
   vpc_id = aws_vpc.this.id
 

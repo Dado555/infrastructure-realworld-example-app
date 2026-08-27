@@ -1,4 +1,4 @@
-# role/elb tag is required for the AWS Load Balancer Controller to pick these up later
+# role/elb tag is required for the AWS Load Balancer Controller
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.this.id
@@ -12,7 +12,6 @@ resource "aws_subnet" "public" {
   }
 }
 
-# role/internal-elb tag is for internal ALBs/NLBs the LB controller creates in this tier
 resource "aws_subnet" "private_app" {
   count             = 2
   vpc_id            = aws_vpc.this.id

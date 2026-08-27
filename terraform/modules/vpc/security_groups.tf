@@ -62,7 +62,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_node" {
   from_port                    = each.value
   to_port                      = each.value
   ip_protocol                  = "tcp"
-  description                  = "alb -> node-sg, port ${each.value}"
+  description                  = "alb to node-sg, port ${each.value}"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "node_from_alb" {
