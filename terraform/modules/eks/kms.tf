@@ -1,4 +1,4 @@
-# dedicated key, not the ecr or bootstrap ones
+# dedicated key for kubernetes secrets
 resource "aws_kms_key" "eks_secrets" {
   description             = "Envelope-encrypts Kubernetes secrets for ${var.name_prefix}-eks"
   enable_key_rotation     = true

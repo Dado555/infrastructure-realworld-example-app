@@ -36,4 +36,10 @@ module "eks" {
   endpoint_public_access_cidrs = var.eks_endpoint_public_access_cidrs
   cluster_log_retention_days   = var.eks_cluster_log_retention_days
   admin_principal_arn          = var.eks_admin_principal_arn
+
+  node_security_group_id = data.terraform_remote_state.network.outputs.node_security_group_id
+  node_instance_type     = var.node_instance_type
+  node_desired_size      = var.node_desired_size
+  node_min_size          = var.node_min_size
+  node_max_size          = var.node_max_size
 }

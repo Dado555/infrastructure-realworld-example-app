@@ -1,4 +1,3 @@
-# control plane only, no node group yet
 resource "aws_eks_cluster" "this" {
   name     = "${var.name_prefix}-eks"
   role_arn = aws_iam_role.cluster.arn

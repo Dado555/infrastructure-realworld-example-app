@@ -27,3 +27,13 @@ output "secrets_kms_key_arn" {
   description = "ARN of the dedicated CMK used for EKS secrets envelope encryption."
   value       = module.eks.secrets_kms_key_arn
 }
+
+output "node_group_arn" {
+  description = "ARN of the managed node group."
+  value       = module.eks.node_group_arn
+}
+
+output "node_group_status" {
+  description = "Status of the managed node group."
+  value       = module.eks.node_group_status
+}

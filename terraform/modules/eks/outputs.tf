@@ -53,3 +53,18 @@ output "cluster_log_group_name" {
   description = "CloudWatch log group name for control-plane logs."
   value       = aws_cloudwatch_log_group.cluster.name
 }
+
+output "node_group_arn" {
+  description = "ARN of the managed node group."
+  value       = aws_eks_node_group.this.arn
+}
+
+output "node_group_status" {
+  description = "Status of the managed node group."
+  value       = aws_eks_node_group.this.status
+}
+
+output "node_iam_role_arn" {
+  description = "ARN of the node IAM role."
+  value       = aws_iam_role.node.arn
+}
