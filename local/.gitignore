@@ -1,0 +1,3 @@
+# Real secrets live only in .env, which you create locally from .env.example.
+# Never commit it -- only the placeholder .env.example is tracked.
+.env
