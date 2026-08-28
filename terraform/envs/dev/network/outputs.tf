@@ -53,11 +53,6 @@ output "private_db_route_table_id" {
   value       = module.vpc.private_db_route_table_id
 }
 
-output "alb_security_group_id" {
-  description = "ID of the ALB security group."
-  value       = module.vpc.alb_security_group_id
-}
-
 output "node_security_group_id" {
   description = "ID of the EKS node security group."
   value       = module.vpc.node_security_group_id
