@@ -28,6 +28,9 @@ data "aws_iam_policy_document" "backend_ecr_push" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:BatchGetImage",
+      # step 8.5: ci reads the digest of the tag it just pushed, to promote
+      # both tag and digest to gitops rather than tag alone
+      "ecr:DescribeImages",
     ]
     resources = [module.ecr_backend.repository_arn]
   }
@@ -59,6 +62,9 @@ data "aws_iam_policy_document" "frontend_ecr_push" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:BatchGetImage",
+      # step 8.5: ci reads the digest of the tag it just pushed, to promote
+      # both tag and digest to gitops rather than tag alone
+      "ecr:DescribeImages",
     ]
     resources = [module.ecr_frontend.repository_arn]
   }
