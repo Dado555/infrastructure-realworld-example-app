@@ -107,10 +107,16 @@ jobs:
 
       - name: trivy config
         run: |
+          # the volume mount already puts repo-relative terraform/ at /terraform,
+          # so strip that same prefix from the component path to avoid /terraform/terraform/...
+          COMPONENT_REL="${DIR_PATH#terraform/}"
           docker run --rm \
             -v "$PWD/terraform:/terraform" \
             -v "$PWD/trivy.yaml:/trivy.yaml" \
-            aquasec/trivy config --config /trivy.yaml "/terraform/${{ steps.dir.outputs.path }}"
+            -v "$PWD/.trivyignore:/.trivyignore" \
+            aquasec/trivy config --config /trivy.yaml "/terraform/${COMPONENT_REL}"
+        env:
+          DIR_PATH: ${{ steps.dir.outputs.path }}
 
       - name: terraform plan
         id: plan

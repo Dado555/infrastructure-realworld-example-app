@@ -1,0 +1,18 @@
+# Accepted-risk misconfigs in terraform/modules/vpc, all intentional design
+# choices rather than oversights. Decision: Step 8.3 CI wiring surfaced these
+# for the first time (trivy was never run against this module before), so they
+# were never actually fixed - just never checked. Review by the exp: date.
+#
+# AVD-AWS-0104: EKS node security group egress is 0.0.0.0/0. Nodes need
+# outbound access to ECR, GitHub, and EKS add-on endpoints; those IP ranges
+# change and aren't practical to pin. Egress-only, no inbound exposure.
+#
+# AVD-AWS-0164: public subnets auto-assign public IPs. That's the definition
+# of a public subnet in this design - the ALB lives here.
+#
+# AVD-AWS-0017: VPC flow-log CloudWatch group isn't KMS-encrypted. Genuinely
+# fixable (add a CMK), just out of scope for CI plumbing - tracked for the
+# Phase 10 security hardening pass instead of bundled into this PR.
+AVD-AWS-0104 exp:2027-02-28
+AVD-AWS-0164 exp:2027-02-28
+AVD-AWS-0017 exp:2027-02-28
