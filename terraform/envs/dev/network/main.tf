@@ -1,4 +1,5 @@
 # default_tags applies these five tags to every resource this provider creates
+# (step 8.3: comment-only change proving the terraform ci pipeline, zero-diff plan)
 provider "aws" {
   region = var.aws_region
 

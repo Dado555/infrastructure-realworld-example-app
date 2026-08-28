@@ -1,0 +1,208 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+
+permissions:
+  contents: read
+
+# terraform/envs/shared/iam (the gha-* CI users themselves) is deliberately NOT
+# a component here - letting gha-infra-apply automate changes to its own
+# permissions is a privilege-escalation-adjacent bootstrapping problem. That
+# composition stays manually-applied only. Matches the Makefile's own TF_DIRS.
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      components: ${{ steps.filter.outputs.changes }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: detect changed components
+        uses: dorny/paths-filter@v4.0.3
+        id: filter
+        with:
+          filters: |
+            bootstrap: 'terraform/bootstrap/**'
+            dev-data: 'terraform/envs/dev/data/**'
+            dev-network: 'terraform/envs/dev/network/**'
+            dev-platform: 'terraform/envs/dev/platform/**'
+            prod-data: 'terraform/envs/prod/data/**'
+            prod-network: 'terraform/envs/prod/network/**'
+            prod-platform: 'terraform/envs/prod/platform/**'
+            # a shared-module change could affect any composition that consumes
+            # it - conservative fallback: modules/quality-gate changes plan everything
+            shared: 'terraform/modules/**'
+
+  plan:
+    needs: detect-changes
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.components != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ contains(fromJSON(needs.detect-changes.outputs.components), 'shared') && fromJSON('["bootstrap","dev-data","dev-network","dev-platform","prod-data","prod-network","prod-platform"]') || fromJSON(needs.detect-changes.outputs.components) }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: component directory
+        id: dir
+        run: |
+          case "${{ matrix.component }}" in
+            bootstrap)     echo "path=terraform/bootstrap" >> "$GITHUB_OUTPUT" ;;
+            dev-data)      echo "path=terraform/envs/dev/data" >> "$GITHUB_OUTPUT" ;;
+            dev-network)   echo "path=terraform/envs/dev/network" >> "$GITHUB_OUTPUT" ;;
+            dev-platform)  echo "path=terraform/envs/dev/platform" >> "$GITHUB_OUTPUT" ;;
+            prod-data)     echo "path=terraform/envs/prod/data" >> "$GITHUB_OUTPUT" ;;
+            prod-network)  echo "path=terraform/envs/prod/network" >> "$GITHUB_OUTPUT" ;;
+            prod-platform) echo "path=terraform/envs/prod/platform" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+
+      - name: setup tflint
+        uses: terraform-linters/setup-tflint@v6.3.0
+        with:
+          tflint_version: latest
+
+      # read-only role - PRs (including from forks) never get write credentials
+      - name: configure aws credentials (plan role)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: terraform fmt check
+        run: terraform fmt -check -recursive terraform
+
+      - name: terraform init
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform init -backend-config=backend.hcl -input=false
+
+      - name: terraform validate
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform validate
+
+      - name: tflint
+        run: |
+          tflint --init --config="$PWD/.tflint.hcl"
+          tflint --chdir="${{ steps.dir.outputs.path }}" --config="$PWD/.tflint.hcl"
+
+      - name: trivy config
+        run: |
+          docker run --rm \
+            -v "$PWD/terraform:/terraform" \
+            -v "$PWD/trivy.yaml:/trivy.yaml" \
+            aquasec/trivy config --config /trivy.yaml "/terraform/${{ steps.dir.outputs.path }}"
+
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform plan -input=false -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: render plan text
+        if: always()
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform show -no-color tfplan > plan.txt
+
+      # posts/updates ONE comment per component (matched by the hidden marker),
+      # rather than a new comment on every push to the PR
+      - name: comment plan on pr
+        if: always()
+        continue-on-error: true # fork PRs get a read-only token; don't fail the check over a comment
+        uses: actions/github-script@v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const component = '${{ matrix.component }}';
+            const marker = `<!-- terraform-plan:${component} -->`;
+            const planText = fs.readFileSync('${{ steps.dir.outputs.path }}/plan.txt', 'utf8').slice(0, 60000);
+            const outcome = '${{ steps.plan.outcome }}';
+            const body = `${marker}\n### Terraform plan - \`${component}\` (${outcome})\n<details><summary>Show plan</summary>\n\n\`\`\`\n${planText}\n\`\`\`\n</details>`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
+            }
+
+      - name: fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  apply:
+    needs: detect-changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.components != '[]'
+    runs-on: ubuntu-latest
+    # this is the actual approval gate: the "prod" environment has a required
+    # reviewer, so the job pauses here until approved, before any write
+    # credential is even loaded. Never -auto-approve outside this job.
+    environment: prod
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ contains(fromJSON(needs.detect-changes.outputs.components), 'shared') && fromJSON('["bootstrap","dev-data","dev-network","dev-platform","prod-data","prod-network","prod-platform"]') || fromJSON(needs.detect-changes.outputs.components) }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: component directory
+        id: dir
+        run: |
+          case "${{ matrix.component }}" in
+            bootstrap)     echo "path=terraform/bootstrap" >> "$GITHUB_OUTPUT" ;;
+            dev-data)      echo "path=terraform/envs/dev/data" >> "$GITHUB_OUTPUT" ;;
+            dev-network)   echo "path=terraform/envs/dev/network" >> "$GITHUB_OUTPUT" ;;
+            dev-platform)  echo "path=terraform/envs/dev/platform" >> "$GITHUB_OUTPUT" ;;
+            prod-data)     echo "path=terraform/envs/prod/data" >> "$GITHUB_OUTPUT" ;;
+            prod-network)  echo "path=terraform/envs/prod/network" >> "$GITHUB_OUTPUT" ;;
+            prod-platform) echo "path=terraform/envs/prod/platform" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+
+      # write role - only ever loaded inside this environment-gated job, which
+      # only starts after the required reviewer approves
+      - name: configure aws credentials (apply role)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform init -backend-config=backend.hcl -input=false
+
+      - name: terraform plan
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform plan -input=false -no-color -out=tfplan
+
+      - name: terraform apply
+        working-directory: ${{ steps.dir.outputs.path }}
+        run: terraform apply -input=false -auto-approve tfplan
