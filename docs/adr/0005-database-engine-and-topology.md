@@ -1,8 +1,8 @@
 # 0005 - Database engine version and dev/prod topology
 
-**Date:** 2026-08-26 (engine version resolved 2026-08-27)
-**Status:** Accepted for topology and backup retention; RDS PostgreSQL engine version
-**resolved to PostgreSQL 14** (see Decision). One open known issue tracked below.
+**Date:** 2026-08-26 (engine version resolved 2026-08-27, LIMIT-syntax known issue fixed 2026-08-28)
+**Status:** Accepted. Engine version resolved to PostgreSQL 14 (see Decision). The known
+issue below is fixed.
 
 ## Context
 
@@ -74,8 +74,10 @@ Boot BOM) so it supports a newer PostgreSQL major.
 
 ## Known issue — MySQL-dialect LIMIT syntax breaks pagination on PostgreSQL
 
-**Not fixed. Deliberately deferred — tracked here, not in code, per an explicit decision not
-to touch production code outside a dedicated step.**
+**Fixed 2026-08-28 (Step 7.5), backend commit `40fc369`.** Deferred from Step 1.7 through
+Phase 7 as documented below, then fixed once it had real, live, user-facing consequence
+(the Step 2.4 smoke test's step 10 failing against the deployed dev ALB) rather than being a
+theoretical Testcontainers-only finding.
 
 Step 1.7's Testcontainers PostgreSQL integration suite
 (`src/test/java/io/spring/infrastructure/PostgresIntegrationTest.java` in the backend repo)
@@ -93,10 +95,15 @@ this bug and were left failing intentionally, as evidence, rather than weakened 
 Create-user, create-article, favoriting, and commenting all pass with real data assertions
 against live PostgreSQL.
 
-**The fix, when someone picks this up:** change both statements to
+**The fix (applied):** changed both statements to
 `limit #{page.limit} offset #{page.offset}` — valid syntax on both MySQL and PostgreSQL, so
-it doesn't regress the SQLite/default profile. `PostgresIntegrationTest`'s two currently-red
-cases are the acceptance criteria; they should flip green with no other test changes.
+it doesn't regress the SQLite/default profile. `PostgresIntegrationTest`'s two previously-red
+cases (`should_paginate_article_list_with_correct_items_and_total_count`,
+`should_filter_articles_by_tag`) flipped green with no other test changes, exactly as
+predicted — all 6 scenarios pass. The default SQLite-backed `./gradlew test` suite also
+still passes (same syntax works on both dialects). Verified end-to-end against the real
+deployed dev environment: the Step 2.4 smoke test's step 10 (`GET /api/articles?tag=`),
+previously the one documented, expected failure, now passes along with all 11 steps.
 
 ## Consequences
 
@@ -104,12 +111,8 @@ cases are the acceptance criteria; they should flip green with no other test cha
   a single instance's price for the standby).
 - Prod's 30-day backup retention costs more in storage than the 7-day minimum but is the
   explicit trade favoring detectability of logical corruption over storage savings.
-- **The backend cannot correctly serve paginated or tag-filtered article listings against
-  PostgreSQL until the known issue above is fixed.** This blocks relying on the `postgres`
-  profile for anything beyond the write/read paths Step 1.7 confirmed working
-  (users, articles-by-slug, favorites, comments) — it does not block RDS provisioning itself
-  (Terraform doesn't care about MyBatis SQL), but it should be fixed before any real traffic
-  hits Postgres-backed pagination, and certainly before Phase 6 (RDS) is treated as done.
+- ~~The backend cannot correctly serve paginated or tag-filtered article listings against
+  PostgreSQL until the known issue above is fixed.~~ Resolved 2026-08-28 — see above.
 
 ## Revisit-when
 
@@ -117,7 +120,4 @@ cases are the acceptance criteria; they should flip green with no other test cha
 newer PostgreSQL major, in which case re-apply the decision framework above against
 whatever Flyway version is current at that time.
 
-**Known issue (LIMIT syntax):** revisit before the backend is pointed at real RDS
-PostgreSQL for production traffic (Phase 6 of the delivery roadmap), or sooner if any
-change in this repo starts requiring correct pagination/tag-filtering support against
-Postgres for a local/dev workflow.
+**Known issue (LIMIT syntax):** resolved — no further action needed.
