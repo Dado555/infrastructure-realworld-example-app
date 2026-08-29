@@ -51,14 +51,16 @@ module "eks" {
   source = "../../../modules/eks"
 
   name_prefix = "${var.project}-${var.environment}"
+  aws_region  = var.aws_region
 
   kubernetes_version = var.kubernetes_version
 
   subnet_ids = data.terraform_remote_state.network.outputs.private_app_subnet_ids
 
-  endpoint_public_access_cidrs = var.eks_endpoint_public_access_cidrs
-  cluster_log_retention_days   = var.eks_cluster_log_retention_days
-  admin_principal_arn          = var.eks_admin_principal_arn
+  endpoint_public_access_cidrs     = var.eks_endpoint_public_access_cidrs
+  cluster_log_retention_days       = var.eks_cluster_log_retention_days
+  observability_log_retention_days = var.eks_observability_log_retention_days
+  admin_principal_arn              = var.eks_admin_principal_arn
 
   node_security_group_id = data.terraform_remote_state.network.outputs.node_security_group_id
   node_instance_type     = var.node_instance_type

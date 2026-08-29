@@ -71,6 +71,14 @@ variable "eks_cluster_log_retention_days" {
   default     = 7
 }
 
+# adr 0015: this one cluster serves both dev and prod, so there's one shared
+# retention setting for container-insights logs, not a per-env split
+variable "eks_observability_log_retention_days" {
+  description = "CloudWatch retention for the amazon-cloudwatch-observability addon's container-insights log groups, in days."
+  type        = number
+  default     = 7
+}
+
 variable "eks_admin_principal_arn" {
   description = "IAM principal ARN granted cluster-admin on the EKS cluster."
   type        = string
@@ -86,17 +94,17 @@ variable "node_instance_type" {
 variable "node_desired_size" {
   description = "Desired node count for the managed node group."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "node_min_size" {
   description = "Minimum node count for the managed node group."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "node_max_size" {
   description = "Maximum node count for the managed node group."
   type        = number
-  default     = 2
+  default     = 3
 }

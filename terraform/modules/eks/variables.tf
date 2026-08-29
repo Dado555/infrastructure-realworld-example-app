@@ -3,6 +3,14 @@ variable "name_prefix" {
   type        = string
 }
 
+# step 9.1: needed to scope the cloudwatch-observability kms key policy to
+# this region's log group arns
+variable "aws_region" {
+  description = "AWS region this module's resources are created in."
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "kubernetes_version" {
   description = "EKS Kubernetes minor version, e.g. 1.36."
   type        = string
@@ -30,6 +38,15 @@ variable "endpoint_public_access_cidrs" {
 
 variable "cluster_log_retention_days" {
   description = "CloudWatch retention for the control-plane log group, in days. Short in dev to keep cost down."
+  type        = number
+  default     = 7
+}
+
+# adr 0015: one eks cluster serves both dev and prod, so there's one shared set
+# of container-insights log groups, not a per-environment split - same "one
+# cluster, one retention" situation cluster_log_retention_days above already has
+variable "observability_log_retention_days" {
+  description = "CloudWatch retention for the amazon-cloudwatch-observability addon's container-insights log groups, in days."
   type        = number
   default     = 7
 }

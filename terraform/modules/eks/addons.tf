@@ -5,6 +5,8 @@ locals {
   addon_version_kube_proxy         = "v1.36.0-eksbuild.17"
   addon_version_ebs_csi_driver     = "v1.64.0-eksbuild.1"
   addon_version_pod_identity_agent = "v1.3.10-eksbuild.3"
+  # step 9.1, pinned 2026-08-29
+  addon_version_cloudwatch_observability = "v6.5.0-eksbuild.1"
 }
 
 resource "aws_eks_addon" "vpc_cni" {
@@ -17,8 +19,20 @@ resource "aws_eks_addon" "vpc_cni" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   # nodeagent ships by default but enforcement is off until this flag turns on the NetworkPolicy->PolicyEndpoint reconciler
+  #
+  # step 9.1: prefix delegation raises the per-node pod ceiling well past the
+  # default ENI-secondary-IP limit (17 pods/node on t3.medium, confirmed live -
+  # hit it twice now, step 6.3 and again installing the cloudwatch-observability
+  # addon's daemonsets). free (no new aws resources), unlike adding a node.
+  # NOTE: existing already-allocated secondary ips on already-attached enis
+  # don't retroactively convert to prefixes - if today's specific stuck pod
+  # doesn't clear once this rolls out, that's why, and the real fix at that
+  # point is cycling the nodes (or as a interim step, adding a 3rd node).
   configuration_values = jsonencode({
     enableNetworkPolicy = "true"
+    env = {
+      ENABLE_PREFIX_DELEGATION = "true"
+    }
   })
 
   tags = {
