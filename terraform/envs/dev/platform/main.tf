@@ -35,6 +35,18 @@ data "terraform_remote_state" "data" {
   }
 }
 
+# adr 0015: prod's app secret lives in its own state (terraform/envs/prod/data),
+# but eso runs once in this same cluster and needs to read both
+data "terraform_remote_state" "prod_data" {
+  backend = "s3"
+
+  config = {
+    bucket = var.data_state_bucket
+    key    = "prod/data/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
 module "eks" {
   source = "../../../modules/eks"
 
@@ -54,9 +66,10 @@ module "eks" {
   node_min_size          = var.node_min_size
   node_max_size          = var.node_max_size
 
-  app_secret_arn          = data.terraform_remote_state.data.outputs.app_secret_arn
-  app_secrets_kms_key_arn = data.terraform_remote_state.data.outputs.app_secrets_kms_key_arn
-  rds_master_secret_arn   = data.terraform_remote_state.data.outputs.master_user_secret_arn
+  app_secret_arn            = data.terraform_remote_state.data.outputs.app_secret_arn
+  app_secrets_kms_key_arn   = data.terraform_remote_state.data.outputs.app_secrets_kms_key_arn
+  rds_master_secret_arn     = data.terraform_remote_state.data.outputs.master_user_secret_arn
+  additional_app_secret_arn = data.terraform_remote_state.prod_data.outputs.app_secret_arn
 }
 
 # token for the helm provider - same tf-user creds, no irsa needed (irsa/oidc is scp-blocked here anyway)

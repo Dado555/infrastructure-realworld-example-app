@@ -100,3 +100,11 @@ variable "rds_master_secret_arn" {
   description = "ARN of the RDS-managed master credential secret (rds!db-... naming, doesn't match the dev/realworld/* prefix). Granted explicitly, not via wildcard."
   type        = string
 }
+
+# adr 0015: prod reuses this same eks cluster/eso installation rather than
+# getting its own, so eso's iam policy needs prod/realworld/* too
+variable "additional_app_secret_arn" {
+  description = "ARN of another environment's app secret (e.g. prod/realworld/app), to derive a second wildcard resource pattern for eso's iam policy. Null if there isn't one."
+  type        = string
+  default     = null
+}

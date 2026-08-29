@@ -17,22 +17,29 @@ resource "aws_iam_role" "external_secrets" {
 
 # derives the dev/realworld/* wildcard from the actual app secret arn instead of hardcoding
 # account id/region here - covers the whole namespace, not just this one secret, matching
-# the "path prefix is load-bearing" comment on the secret resource in dev/data
+# the "path prefix is load-bearing" comment on the secret resource in dev/data. same derivation
+# for a second environment's secret (adr 0015: prod shares this eso installation).
 locals {
   app_secrets_arn_pattern = "${regex("^(.*/)[^/]+$", var.app_secret_arn)[0]}*"
+  additional_app_secrets_arn_pattern = (
+    var.additional_app_secret_arn != null
+    ? "${regex("^(.*/)[^/]+$", var.additional_app_secret_arn)[0]}*"
+    : null
+  )
 }
 
-# scoped to exactly the two secrets eso needs to read - never widen this to secretsmanager:*
+# scoped to exactly the secrets eso needs to read - never widen this to secretsmanager:*
 # or Resource: "*". the rds managed-credential secret uses aws's own default key (verified via
 # describe-secret, KmsKeyId was null), so only the app-secrets cmk needs an explicit kms grant.
 data "aws_iam_policy_document" "external_secrets" {
   statement {
     sid     = "ReadRealworldAppSecrets"
     actions = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = [
+    resources = compact([
       local.app_secrets_arn_pattern,
+      local.additional_app_secrets_arn_pattern,
       var.rds_master_secret_arn,
-    ]
+    ])
   }
 
   statement {
