@@ -102,6 +102,20 @@ variable "node_ami_type" {
   default     = "AL2023_x86_64_STANDARD"
 }
 
+# step 9.3: the un-overridden default (17, the standard ENI-based formula for t3.medium) is a
+# hard per-node pod ceiling unrelated to actual cpu/memory capacity - first hit in step 6.3, hit
+# again in step 9.1 (cloudwatch observability daemonsets), and now blocks kube-prometheus-stack's
+# node-exporter daemonset outright since 2 of 3 nodes are already at 17/17. prefix delegation
+# (step 9.1) fixed ip *allocation* efficiency but never raised this ceiling - it's a separate,
+# statically-computed kubelet value baked in at node bootstrap. 110 matches upstream kubernetes'
+# own general-purpose recommended ceiling, well above what this node size could ever host on
+# cpu/memory alone, so it removes pod-count as an artificial constraint without being unbounded.
+variable "node_max_pods" {
+  description = "Overrides kubelet's --max-pods via nodeadm NodeConfig user-data, replacing the default ENI-based per-instance-type calculation."
+  type        = number
+  default     = 110
+}
+
 # step 6.3: external secrets operator inputs, sourced from dev/data's remote state
 variable "app_secret_arn" {
   description = "ARN of the dev/realworld/app secret (JWT signing key). Used to derive the dev/realworld/* resource pattern for eso's iam policy."
@@ -124,4 +138,12 @@ variable "additional_app_secret_arn" {
   description = "ARN of another environment's app secret (e.g. prod/realworld/app), to derive a second wildcard resource pattern for eso's iam policy. Null if there isn't one."
   type        = string
   default     = null
+}
+
+# step 9.3: separate dev/observability/* pattern, not folded into dev/realworld/* - observability
+# secrets (grafana admin creds) are a different logical category from app secrets, matching the
+# same reasoning that already split prod/realworld/* out as its own pattern in step 8.6.
+variable "observability_secret_arn" {
+  description = "ARN of the dev/observability/grafana secret, to derive the dev/observability/* resource pattern for eso's iam policy."
+  type        = string
 }

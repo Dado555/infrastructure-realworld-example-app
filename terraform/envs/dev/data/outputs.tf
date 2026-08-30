@@ -43,3 +43,9 @@ output "app_secrets_kms_key_arn" {
   description = "ARN of the CMK encrypting the app secrets, for eso's kms:Decrypt grant."
   value       = aws_kms_key.app_secrets.arn
 }
+
+# step 9.3 reads this via remote state to scope eso's iam policy
+output "observability_secret_arn" {
+  description = "ARN of the dev/observability/grafana secret (grafana admin credentials)."
+  value       = aws_secretsmanager_secret.grafana.arn
+}

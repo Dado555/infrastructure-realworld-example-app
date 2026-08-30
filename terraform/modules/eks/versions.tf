@@ -10,5 +10,9 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.12"
     }
+    cloudinit = {
+      source  = "hashicorp/cloudinit"
+      version = "~> 2.3"
+    }
   }
 }

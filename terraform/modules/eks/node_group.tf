@@ -1,6 +1,46 @@
+# nodeadm NodeConfig (al2023's bootstrap mechanism, not the old bootstrap.sh shell flags) - only
+# to override kubelet's max-pods (see the node_max_pods variable). spec.cluster is populated
+# explicitly rather than relying on eks to merge its own auto-generated join config in: verified
+# against the real nodeadm source (awslabs/amazon-eks-ami, group is node.eks.aws, NOT the
+# nodeadm.k8s.aws some docs summaries claim) and against terraform-aws-modules/terraform-aws-eks's
+# actual al2023_user_data.tpl, which always populates this block itself for exactly this reason -
+# not worth trusting the auto-merge behavior on a live 3-node cluster's bootstrap path.
+locals {
+  node_user_data = <<-EOT
+    ---
+    apiVersion: node.eks.aws/v1alpha1
+    kind: NodeConfig
+    spec:
+      cluster:
+        name: ${aws_eks_cluster.this.name}
+        apiServerEndpoint: ${aws_eks_cluster.this.endpoint}
+        certificateAuthority: ${aws_eks_cluster.this.certificate_authority[0].data}
+        cidr: ${aws_eks_cluster.this.kubernetes_network_config[0].service_ipv4_cidr}
+      kubelet:
+        config:
+          maxPods: ${var.node_max_pods}
+  EOT
+}
+
+# a plain (non-multipart) user_data was rejected outright by a real apply:
+# Ec2LaunchTemplateInvalidConfiguration: "User data was not in the MIME multipart format" - eks
+# managed node groups require the mime envelope even for a single document, confirmed live, not
+# just inferred from terraform-aws-modules/terraform-aws-eks's own use of cloudinit_config here.
+data "cloudinit_config" "node" {
+  base64_encode = true
+  gzip          = false
+  boundary      = "MIMEBOUNDARY"
+
+  part {
+    content_type = "application/node.eks.aws"
+    content      = local.node_user_data
+  }
+}
+
 # custom sgs suppress eks's automatic cluster-sg attachment, so both are listed explicitly here
 resource "aws_launch_template" "node" {
   name_prefix = "${var.name_prefix}-node-"
+  user_data   = data.cloudinit_config.node.rendered
 
   vpc_security_group_ids = [
     aws_eks_cluster.this.vpc_config[0].cluster_security_group_id,

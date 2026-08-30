@@ -26,6 +26,9 @@ locals {
     ? "${regex("^(.*/)[^/]+$", var.additional_app_secret_arn)[0]}*"
     : null
   )
+  # step 9.3: same derivation, separate pattern - dev/observability/* is its own category,
+  # not folded into dev/realworld/*
+  observability_secrets_arn_pattern = "${regex("^(.*/)[^/]+$", var.observability_secret_arn)[0]}*"
 }
 
 # scoped to exactly the secrets eso needs to read - never widen this to secretsmanager:*
@@ -40,6 +43,14 @@ data "aws_iam_policy_document" "external_secrets" {
       local.additional_app_secrets_arn_pattern,
       var.rds_master_secret_arn,
     ])
+  }
+
+  # step 9.3: grafana admin credentials - same app_secrets cmk (see dev/data/secrets.tf), so
+  # no separate kms statement needed, DecryptAppSecretsKey below already covers it.
+  statement {
+    sid       = "ReadObservabilitySecrets"
+    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    resources = [local.observability_secrets_arn_pattern]
   }
 
   statement {

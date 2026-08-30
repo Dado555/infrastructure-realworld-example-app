@@ -72,6 +72,7 @@ module "eks" {
   app_secrets_kms_key_arn   = data.terraform_remote_state.data.outputs.app_secrets_kms_key_arn
   rds_master_secret_arn     = data.terraform_remote_state.data.outputs.master_user_secret_arn
   additional_app_secret_arn = data.terraform_remote_state.prod_data.outputs.app_secret_arn
+  observability_secret_arn  = data.terraform_remote_state.data.outputs.observability_secret_arn
 }
 
 # token for the helm provider - same tf-user creds, no irsa needed (irsa/oidc is scp-blocked here anyway)

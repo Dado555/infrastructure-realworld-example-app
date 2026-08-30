@@ -37,3 +37,30 @@ resource "aws_secretsmanager_secret_version" "app" {
 # rotation for the rds master credential is deferred - aws's manage_master_user_password
 # feature (already on from step 6.1) supports enabling built-in rotation later without a
 # custom lambda; that's the likely path, not a hand-rolled rotation function
+
+# step 9.3: grafana admin credentials, eso-synced - never in a helm values file. separate
+# secretsmanager path (dev/observability/*, not dev/realworld/*) mirrors the prod/realworld/*
+# split from step 8.6 - observability is a different logical category from app secrets, not
+# just a convenience reuse of the existing wildcard.
+resource "random_password" "grafana_admin" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "grafana" {
+  name                    = "${var.environment}/observability/grafana"
+  description             = "Grafana admin credentials for ${var.environment}"
+  kms_key_id              = aws_kms_key.app_secrets.arn
+  recovery_window_in_days = 7
+}
+
+# key names (admin-user/admin-password) match kube-prometheus-stack's grafana subchart
+# defaults (admin.userKey/admin.passwordKey) exactly, so the ExternalSecret can a plain
+# dataFrom.extract with no per-key template block
+resource "aws_secretsmanager_secret_version" "grafana" {
+  secret_id = aws_secretsmanager_secret.grafana.id
+  secret_string = jsonencode({
+    admin-user     = "admin"
+    admin-password = random_password.grafana_admin.result
+  })
+}
