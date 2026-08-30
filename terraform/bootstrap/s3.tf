@@ -1,14 +1,11 @@
-# Terraform remote state bucket
 resource "aws_s3_bucket" "terraform_state" {
   bucket = local.state_bucket_name
 
-  # prevent_destroy blocks an accidental terraform destroy
   lifecycle {
     prevent_destroy = true
   }
 }
 
-# State file can be rolled back
 resource "aws_s3_bucket_versioning" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -17,7 +14,6 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   }
 }
 
-# Server-side encryption using the CMK
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -41,7 +37,6 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   restrict_public_buckets = true
 }
 
-# Delete version after 90 days
 resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
