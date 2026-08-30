@@ -64,3 +64,19 @@ resource "aws_secretsmanager_secret_version" "grafana" {
     admin-password = random_password.grafana_admin.result
   })
 }
+
+# step 9.6: alertmanager's slack webhook - same dev/observability/* path prefix as grafana's
+# secret above (same logical category: observability-tooling credentials, not app secrets).
+resource "aws_secretsmanager_secret" "alertmanager_slack" {
+  name                    = "${var.environment}/observability/alertmanager-slack"
+  description             = "Slack incoming webhook URL for Alertmanager notifications, for ${var.environment}"
+  kms_key_id              = aws_kms_key.app_secrets.arn
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret_version" "alertmanager_slack" {
+  secret_id = aws_secretsmanager_secret.alertmanager_slack.id
+  secret_string = jsonencode({
+    slack-webhook-url = var.slack_webhook_url
+  })
+}

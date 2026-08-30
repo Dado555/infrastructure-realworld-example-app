@@ -49,3 +49,10 @@ output "observability_secret_arn" {
   description = "ARN of the dev/observability/grafana secret (grafana admin credentials)."
   value       = aws_secretsmanager_secret.grafana.arn
 }
+
+# step 9.6: same dev/observability/* pattern already covers this - no separate output/iam
+# change needed, unlike grafana's secret which needed the pattern created in the first place.
+output "alertmanager_slack_secret_arn" {
+  description = "ARN of the dev/observability/alertmanager-slack secret."
+  value       = aws_secretsmanager_secret.alertmanager_slack.arn
+}

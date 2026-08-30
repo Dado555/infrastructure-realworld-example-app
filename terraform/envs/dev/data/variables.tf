@@ -86,3 +86,12 @@ variable "backup_daily_retention_days" {
   type        = number
   default     = 7
 }
+
+# step 9.6: user-provided, not terraform-generated (unlike the jwt/grafana secrets) - no
+# default, must be supplied at apply time via TF_VAR_slack_webhook_url so the raw value never
+# appears in any command's own visible argument text, let alone a committed file.
+variable "slack_webhook_url" {
+  description = "Slack incoming webhook URL for Alertmanager notifications."
+  type        = string
+  sensitive   = true
+}

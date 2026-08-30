@@ -16,4 +16,20 @@ resource "helm_release" "argocd" {
     name  = "server.service.type"
     value = "ClusterIP"
   }
+
+  # step 9.6: application-controller metrics only (argocd_app_info - sync_status/health_status),
+  # not every component - that's all alert 5 (Argo Application unhealthy) needs. release label
+  # matches the Prometheus CR's own serviceMonitorSelector (step 9.4's same requirement).
+  set {
+    name  = "controller.metrics.enabled"
+    value = "true"
+  }
+  set {
+    name  = "controller.metrics.serviceMonitor.enabled"
+    value = "true"
+  }
+  set {
+    name  = "controller.metrics.serviceMonitor.additionalLabels.release"
+    value = "observability"
+  }
 }
